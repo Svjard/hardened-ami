@@ -1,0 +1,26 @@
+---
+
+# Ensure all packages have been patched
+- name: download cloudwatch logs agent
+  get_url:
+    url: https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+    dest: /tmp/amazon-cloudwatch-agent.deb
+    mode: 0755
+
+- name: install cloudwatch logs agent
+  command: dpkg -i -E /tmp/amazon-cloudwatch-agent.deb
+
+- name: install SSM agent
+  shell: snap install amazon-ssm-agent --classic
+
+- name: start the SSM agent as fail-safe
+  shell: snap start amazon-ssm-agent
+
+- name: download AWS inspector agent
+  get_url:
+    url: https://inspector-agent.amazonaws.com/linux/latest/install
+    dest: /tmp/install
+    mode: 0755
+
+- name: install the AWS inspector agent
+  shell: bash /tmp/install

@@ -1,0 +1,440 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  ServiceName:
+    Type: String
+    Default: HardenedAMI
+    Description: Name for this service; used in the code repository and pipeline names
+
+  CodeBuildEnvironment:
+    Type: String
+    Default: "eb-python-2.6-amazonlinux-64:2.1.6"
+    Description: Docker image to use for CodeBuild container - Use http://amzn.to/2mjCI91 for reference
+
+  BuilderVPC:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID that AMI Builder will use to launch temporary resource
+
+  BuilderPublicSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public Subnet ID that AMI Builder will use to launch temporary resource
+
+  SlackWebHook:
+    Type: String
+    Description: Slack webhook to receive new AMI ID created by AMI Builder
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "AMI Builder - Resources Name"
+        Parameters: 
+          - ServiceName
+      - 
+        Label: 
+          default: "Packer - Temporary Resources"
+        Parameters: 
+          - BuilderVPC
+          - BuilderPublicSubnet
+      - 
+        Label: 
+          default: "Packer - CodeBuild environment"
+        Parameters: 
+          - CodeBuildEnvironment
+      - 
+        Label: 
+          default: "AMI Builder - Notifications"
+        Parameters: 
+          - SlackWebHook         
+    ParameterLabels:
+      ServiceName:
+        default: "CodeCommit repository and pipeline name?"
+      BuilderVPC: 
+        default: "Which VPC should I use?"
+      BuilderPublicSubnet: 
+        default: "Which Public Subnet should I use?"
+      CodeBuildEnvironment: 
+        default: "Should I use a different Docker Image?"
+      SlackWebHook:
+        default: "What is the Slack webhook URL to post notifications to?"
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AwsInspector:
+        - "arn:aws:inspector:us-east-1:316112463485:rulespackage/0-gEjTy7T7"
+        - "arn:aws:inspector:us-east-1:316112463485:rulespackage/0-rExsr2X8"
+        - "arn:aws:inspector:us-east-1:316112463485:rulespackage/0-R01qwB5Q"
+        - "arn:aws:inspector:us-east-1:316112463485:rulespackage/0-gBONHN9h"
+    us-east-2:
+      AwsInspector:
+        - "arn:aws:inspector:us-east-2:646659390643:rulespackage/0-JnA8Zp85"
+        - "arn:aws:inspector:us-east-2:646659390643:rulespackage/0-m8r61nnh"
+        - "arn:aws:inspector:us-east-2:646659390643:rulespackage/0-AxKmMHPX"
+        - "arn:aws:inspector:us-east-2:646659390643:rulespackage/0-UCYZFKPV"
+    us-west-1:
+      AwsInspector:
+        - "arn:aws:inspector:us-west-1:166987590008:rulespackage/0-TKgzoVOa"
+        - "arn:aws:inspector:us-west-1:166987590008:rulespackage/0-xUY8iRqX"
+        - "arn:aws:inspector:us-west-1:166987590008:rulespackage/0-byoQRFYm"
+        - "arn:aws:inspector:us-west-1:166987590008:rulespackage/0-yeYxlt0x"
+    us-west-2:
+      AwsInspector:
+        - "arn:aws:inspector:us-west-2:758058086616:rulespackage/0-9hgA516p"
+        - "arn:aws:inspector:us-west-2:758058086616:rulespackage/0-H5hpSawc"
+        - "arn:aws:inspector:us-west-2:758058086616:rulespackage/0-JJOtZiqQ"
+        - "arn:aws:inspector:us-west-2:758058086616:rulespackage/0-vg5GGHSD"
+    ap-south-1:
+      AwsInspector:
+        - "arn:aws:inspector:ap-south-1:162588757376:rulespackage/0-LqnJE9dO"
+        - "arn:aws:inspector:ap-south-1:162588757376:rulespackage/0-PSUlX14m"
+        - "arn:aws:inspector:ap-south-1:162588757376:rulespackage/0-fs0IZZBj"
+        - "arn:aws:inspector:ap-south-1:162588757376:rulespackage/0-EhMQZy6C"
+    ap-northeast-2:
+      AwsInspector:
+        - "arn:aws:inspector:ap-northeast-2:526946625049:rulespackage/0-PoGHMznc"
+        - "arn:aws:inspector:ap-northeast-2:526946625049:rulespackage/0-T9srhg1z"
+        - "arn:aws:inspector:ap-northeast-2:526946625049:rulespackage/0-2WRpmi4n"
+        - "arn:aws:inspector:ap-northeast-2:526946625049:rulespackage/0-PoYq7lI7"
+    ap-southeast-2:
+      AwsInspector:
+        - "arn:aws:inspector:ap-southeast-2:454640832652:rulespackage/0-D5TGAxiR"
+        - "arn:aws:inspector:ap-southeast-2:454640832652:rulespackage/0-Vkd2Vxjq"
+        - "arn:aws:inspector:ap-southeast-2:454640832652:rulespackage/0-asL6HRgN"
+        - "arn:aws:inspector:ap-southeast-2:454640832652:rulespackage/0-P8Tel2Xj"
+    ap-northeast-1:
+      AwsInspector:
+        - "arn:aws:inspector:ap-northeast-1:406045910587:rulespackage/0-gHP9oWNT"
+        - "arn:aws:inspector:ap-northeast-1:406045910587:rulespackage/0-7WNjqgGu"
+        - "arn:aws:inspector:ap-northeast-1:406045910587:rulespackage/0-bBUQnxMq"
+        - "arn:aws:inspector:ap-northeast-1:406045910587:rulespackage/0-knGBhqEu"
+    eu-central-1:
+      AwsInspector:
+        - "arn:aws:inspector:eu-central-1:537503971621:rulespackage/0-wNqHa8M9"
+        - "arn:aws:inspector:eu-central-1:537503971621:rulespackage/0-nZrAVuv8"
+        - "arn:aws:inspector:eu-central-1:537503971621:rulespackage/0-ZujVHEPB"
+        - "arn:aws:inspector:eu-central-1:537503971621:rulespackage/0-0GMUM6fg"
+    eu-west-1:
+      AwsInspector:
+        - "arn:aws:inspector:eu-west-1:357557129151:rulespackage/0-ubA5XvBh"
+        - "arn:aws:inspector:eu-west-1:357557129151:rulespackage/0-sJBhCr0F"
+        - "arn:aws:inspector:eu-west-1:357557129151:rulespackage/0-SnojL3Z6"
+        - "arn:aws:inspector:eu-west-1:357557129151:rulespackage/0-lLmwe1zd"
+    eu-west-2:
+      AwsInspector:
+        - "arn:aws:inspector:eu-west-2:146838936955:rulespackage/0-kZGCqcE1"
+        - "arn:aws:inspector:eu-west-2:146838936955:rulespackage/0-IeCjwf1W"
+        - "arn:aws:inspector:eu-west-2:146838936955:rulespackage/0-XApUiSaP"
+        - "arn:aws:inspector:eu-west-2:146838936955:rulespackage/0-S8t0UlXB"
+    eu-north-1:
+      AwsInspector:
+        - "arn:aws:inspector:eu-north-1:453420244670:rulespackage/0-IgdgIewd"
+        - "arn:aws:inspector:eu-north-1:453420244670:rulespackage/0-Yn8jlX7f"
+        - "arn:aws:inspector:eu-north-1:453420244670:rulespackage/0-HfBQSbSf"
+        - "arn:aws:inspector:eu-north-1:453420244670:rulespackage/0-bwwFfRbF"
+
+Resources:
+  ##########
+  # Source #
+  ##########
+
+  # Code repository for AMI Builder
+  CodeRepository:
+    Type: "AWS::CodeCommit::Repository"
+    Properties:
+      RepositoryName: !Sub ${ServiceName}Repo
+      RepositoryDescription: !Sub "Repository for ${ServiceName} service"
+
+  #########
+  # Build #
+  #########
+
+  # S3 Bucket that CodePipeline/CodeBuild service will use
+  # It will receive both SourceZip (CodeCommit Git HEAD) and BuiltZIP (CodeBuild Artifacts)
+  BuildArtifactsBucket:
+    Type: "AWS::S3::Bucket"
+
+  CodeBuildServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/managed/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/PowerUserAccess"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "codebuild.amazonaws.com"
+      Policies:
+        - 
+          PolicyName: "CodeBuildAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - 
+                Sid: "CodeBuildToCWL"
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ServiceName}Build"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ServiceName}Build:*"
+              - 
+                Sid: "CodeBuildToS3ArtifactRepo"
+                Effect: "Allow"
+                Action: 
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${BuildArtifactsBucket}/*"
+
+  CodeBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Name: !Sub "${ServiceName}Build"
+      Artifacts:
+        Type: "CODEPIPELINE"
+      Environment: 
+        Type: "LINUX_CONTAINER"
+        ComputeType: "BUILD_GENERAL1_SMALL"
+        Image: !Sub "aws/codebuild/${CodeBuildEnvironment}"
+        EnvironmentVariables:
+          - Name: "BUILD_OUTPUT_BUCKET"
+            Value: !Ref BuildArtifactsBucket
+          - Name: "BUILD_VPC_ID"
+            Value: !Ref BuilderVPC
+          - Name: "BUILD_SUBNET_ID"
+            Value: !Ref BuilderPublicSubnet
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source: 
+        Type: "CODEPIPELINE"
+    
+  #############
+  # Pipeline  #
+  #############
+  
+  PipelineExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/managed/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: 
+                - "codepipeline.amazonaws.com"
+      Policies:
+        - 
+          PolicyName: "CodePipelinePassRoleAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - 
+                Action: "iam:PassRole"
+                Effect: "Allow"
+                Resource: !GetAtt CodeBuildServiceRole.Arn
+        - 
+          PolicyName: "CodePipelineS3ArtifactAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - 
+                Action:
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:GetBucketVersioning"
+                  - "s3:PutObject"
+                Effect: "Allow"
+                Resource: 
+                  - !Sub "arn:aws:s3:::${BuildArtifactsBucket}"
+                  - !Sub "arn:aws:s3:::${BuildArtifactsBucket}/*"
+        - 
+          PolicyName: "CodePipelineGitRepoAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - 
+                Action:
+                  - "codecommit:GetBranch"
+                  - "codecommit:GetCommit"
+                  - "codecommit:UploadArchive"
+                  - "codecommit:GetUploadArchiveStatus"
+                  - "codecommit:CancelUploadArchive"
+                Effect: "Allow"
+                Resource: !GetAtt CodeRepository.Arn
+        - 
+          PolicyName: "CodePipelineBuildAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - 
+                Action:
+                  - "codebuild:StartBuild"
+                  - "codebuild:StopBuild"
+                  - "codebuild:BatchGetBuilds"
+                Effect: "Allow"
+                Resource: !GetAtt CodeBuildProject.Arn
+
+  Pipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    Properties:
+      ArtifactStore: 
+        Location: !Ref BuildArtifactsBucket
+        Type: "S3"
+      Name: !Sub ${ServiceName}Pipeline
+      RoleArn: !GetAtt PipelineExecutionRole.Arn
+      Stages:
+        - 
+          Name: "Source"
+          Actions:
+            - 
+              Name: "CodeCommitRepo"
+              ActionTypeId:
+                Category: "Source"
+                Owner: "AWS"
+                Provider: "CodeCommit"
+                Version: 1
+              Configuration:
+                RepositoryName: !Sub ${ServiceName}Repo
+                BranchName: "master"
+              OutputArtifacts:
+                - Name: "SourceZip"
+              RunOrder: 1
+        - 
+          Name: "Build"
+          Actions:
+            - 
+              Name: "CodeBuild"
+              ActionTypeId:
+                Category: "Build"
+                Owner: "AWS"
+                Provider: "CodeBuild"
+                Version: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: "SourceZip"
+              OutputArtifacts:
+                - Name: "BuiltZip"
+
+  ######################
+  # AWS Inspector      #
+  ######################
+  AmiInspectorGroup:
+    Type: "AWS::Inspector::ResourceGroup"
+    Properties: 
+      ResourceGroupTags: 
+        - 
+          Key: "ResourceType"
+          Value: "AMI"
+        -
+          Key: "Environment"
+          Value: "Production"
+        -
+          Key: "OS"
+          Value: "Ubuntu"
+  
+  AmiInspectorTarget:
+    Type: "AWS::Inspector::AssessmentTarget"
+    DependsOn: AmiInspectorGroup
+    Properties:
+      AssessmentTargetName: "AMIBildVerify"
+      ResourceGroupArn: !Ref AmiInspectorGroup
+  
+  AmiInspectorTemplate:
+    Type: "AWS::Inspector::AssessmentTemplate"
+    DependsOn: AmiInspectorTarget
+    Properties: 
+      AssessmentTargetArn: !Ref AmiInspectorTarget
+      AssessmentTemplateName: "AMIBuildVerfication"
+      DurationInSeconds: 180
+      RulesPackageArns:
+        !FindInMap
+        - RegionMap
+        - !Ref "AWS::Region"
+        - AwsInspector
+      UserAttributesForFindings: 
+        - 
+          Key: "ResourceType"
+          Value: "AMI"
+        -
+          Key: "Environment"
+          Value: "Production"
+        -
+          Key: "OS"
+          Value: "Ubuntu"
+
+  ######################
+  # AMI Builder Event  #
+  ######################
+
+  AmiBuilderNotificationTopic: 
+    Type: "AWS::SNS::Topic"
+    Properties:
+      Subscription:
+        - 
+          Endpoint: !Ref SlackWebHook
+          Protocol: "https"
+      TopicName: "AmiBuilderNotify"
+
+  AmiBuilderNotificationTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: "AllowCloudwatchEventsToPublish"
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Sid: "CloudWatchEventsPublish"
+            Effect: "Allow"
+            Principal:
+              Service: "events.amazonaws.com"
+            Action: "sns:Publish"
+            Resource: !Ref AmiBuilderNotificationTopic
+      Topics:
+        - !Ref AmiBuilderNotificationTopic
+
+  AmiBuilderCustomEvent:
+    Type: "AWS::Events::Rule"
+    Properties: 
+      Description: "AmiBuilder-Complete"
+      EventPattern: 
+        source: 
+          - "com.ami.builder"
+        detail-type: 
+          - "AmiBuilder"
+        detail:
+          AmiStatus: 
+            - "Created"
+      State: "ENABLED"
+      Targets:
+        -
+          Id: "NewAMI-Notify"
+          Arn: !Ref AmiBuilderNotificationTopic
+
+Outputs:
+  ArtifactRepository:
+    Description: "S3 Bucket for Pipeline and Build Artifacts"
+    Value: !Ref BuildArtifactsBucket
+
+  CodeBuildServiceRole:
+    Description: "CodeBuild IAM Service Role"
+    Value: !GetAtt CodeBuildServiceRole.Arn
+
+  CodePipelineServiceRole:
+    Description: "CodePipeline IAM Service Role"
+    Value: !GetAtt PipelineExecutionRole.Arn
+
+  GitRepository:
+    Description: "Git repository HTTP URL"
+    Value: !GetAtt CodeRepository.CloneUrlHttp
+

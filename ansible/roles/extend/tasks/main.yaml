@@ -1,0 +1,13 @@
+---
+
+- name: add ClamAV for Linux
+  command: apt install clamav clamav-daemon
+
+- name: setup ClamAV scan schedule
+  template:
+    src: clamscan_daily.sh.j2
+    dest: /root/clamscan_daily.sh
+    mode: 0755
+
+- name: link the ClamAV to a daily cron job
+  command: ln /root/clamscan_daily.sh /etc/cron.daily/clamscan_daily

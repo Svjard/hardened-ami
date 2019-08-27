@@ -1,0 +1,38 @@
+version: 0.2
+environment_variables:
+ plaintext:
+  REGIONS: "us-west-2;eu-west-2"
+
+phases:
+  pre_build:
+    commands:
+      - echo "Installing Packer"
+      - curl -o packer.zip https://releases.hashicorp.com/packer/1.3.3/packer_1.3.3_linux_amd64.zip && unzip packer.zip
+      - echo "Validating Packer template"
+      - ./packer validate packer_cis.json
+  build:
+    commands:
+      - ./packer build -color=false packer_cis.json | tee build.log
+  post_build:
+    commands:
+      - sudo tar zcpP -C /mnt/ . | docker import - ubuntu:ami-d732f0b7
+      - push to ecr
+      - egrep "${AWS_REGION}\:\sami\-" build.log | cut -d' ' -f2 > ami_id.txt
+      # Packer doesn't return non-zero status; we must do that if Packer build failed
+      - test -s ami_id.txt || exit 1
+      - AMI_ID=$(sed -i.bak "s/<<AMI-ID>>/$(cat ami_id.txt)/g")
+      - IFS=';'
+      - read -ra REGIONS <<< "$IN"
+      -
+        for i in "${ADDR[@]}"; do
+          aws ec2 copy-image --name Prod-CIS-Latest-Ubuntu1804-$DATE --source-image-id $AMI_ID --source-region ${AWS_REGION} --region $i
+        done
+      - {"text": "* New AMI Available ($AMI_ID)*","icon_emoji": ":aws:","attachments":{"color":"good","text":""}}
+      - sed -i.bak $AMI_ID ami_builder_event.json
+      - aws events put-events --entries file://ami_builder_event.json
+      - echo "build completed on `date`"
+artifacts:
+  files:
+    - ami_builder_event.json
+    - build.log
+  discard-paths: yes
